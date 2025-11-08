@@ -1,8 +1,7 @@
-import { error } from "console";
 import OpenAI from "openai";
 import { zodResponseFormat } from "openai/helpers/zod.mjs";
 import z from "zod";
-import { produtosEmEstoque, produtosEmFalta } from "./database";
+import { produtosEmEstoque, produtosEmFalta, setEmbedding, todosProdutos } from "./database";
 import { ChatCompletionMessageParam } from "openai/resources";
 
 const schema = z.object({
@@ -11,7 +10,7 @@ const schema = z.object({
 });
 
 const apiKey =
-  process.env.OPENAI_KEY 
+  process.env.OPENAI_KEY
 
 const client = new OpenAI({
   apiKey,
@@ -21,7 +20,7 @@ export const generateProducts = async ({ prompt }: { prompt: string }) => {
   const messages: ChatCompletionMessageParam[] = [
     {
       role: "developer",
-      content: `Liste produtos que atendam a necessidade do usuário. Apenas os que estão em estoque. Caso um item não exista no banco de dados, gere uma mensagem educada avisando que não tem esse item, caso tiver produtos gere uma mensagem educada incentivando a compra e agradecendo`,
+      content: `Liste no maximo 3 produtos que atendam a necessidade do usuário. Apenas os que estão em estoque. Caso um item não exista no banco de dados, gere uma mensagem educada avisando que não tem esse item, caso tiver produtos gere uma mensagem educada incentivando a compra e agradecendo`,
     },
     {
       role: "user",
@@ -66,7 +65,7 @@ export const generateProducts = async ({ prompt }: { prompt: string }) => {
     });
 
     if (completion.choices[0].message.refusal) {
-      throw new error("Ocorreu um erro com a geração da resposta");
+      throw new Error("Ocorreu um erro com a geração da resposta");
     }
 
      const { tool_calls } = completion.choices[0].message;
@@ -82,7 +81,7 @@ export const generateProducts = async ({ prompt }: { prompt: string }) => {
     if (!(tool_call.type === "function"))
       throw new Error("Erro ao buscar tipo da tool call");
 
-    const functionCall = toolsMap[tool_call.function.name];
+    const functionCall  = toolsMap[tool_call.function.name];
 
     if (!functionCall) {
       throw new Error(" Funçao nao encontrada");
@@ -108,3 +107,22 @@ export const generateProducts = async ({ prompt }: { prompt: string }) => {
 
   return JSON.parse(completion.message.content ?? "");
 };
+
+export const generateEmbedding = async (input: string) =>{
+  const response = await client.embeddings.create({
+    input,
+    model: "text-embedding-3-small"
+  })
+
+  return response.data[0].embedding ?? null
+}
+
+export const embedProducts = async () => {
+  const products = todosProdutos()
+
+  await Promise.allSettled(products.map(async (p, index) =>{
+    const embedding = await generateEmbedding(`${p.nome}: ${p.descricao}`)
+    if(!embedding) return
+    setEmbedding({index, embedding})
+  }))
+}

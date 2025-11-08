@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "strict": false,
+    "noImplicitAny": false,
+    "noImplicitThis": false,
+    "alwaysStrict": false,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
+  },
+}
